@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tontine – Suivi des cotisations</title>
+<link rel="stylesheet" href="style.css"></head>
+<body><main>
+<h1>💰 Suivi des tontines</h1>
+<p class="sub">Enregistrez les membres, puis chaque paiement avec sa date, son heure et son montant. Le total cotisé se met à jour automatiquement. Les données restent sur cet appareil.</p>
+<div id="app"></div>
+</main>
+<script>
+var KEY="tontines_v2",S={t:[],cur:null,open:null};
+try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S.t=o.t||[];S.cur=o.cur||null}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({t:S.t,cur:S.cur}))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function fmt(n){return Number(n).toLocaleString("fr-FR")+" FCFA"}
+function uid(){return Math.random().toString(36).slice(2,9)}
+function cur(){return S.t.find(function(x){return x.id===S.cur})}
+function now(){var d=new Date(),p=function(n){return String(n).padStart(2,"0")};return{d:d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()),t:p(d.getHours())+":"+p(d.getMinutes())}}
+function show(p){return new Date(p.d+"T"+p.t).toLocaleString("fr-FR",{weekday:"short",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}
+function total(m){return m.pays.reduce(function(s,p){return s+p.a},0)}
+function render(){
+  var h="",t=cur();
+  h+='<div class="card"><h2>Mes tontines</h2>';
+  if(S.t.length)h+='<div class="chips">'+S.t.map(function(x){return '<button class="chip '+(x.id===S.cur?'on':'')+'" data-a="sel" data-id="'+x.id+'">'+esc(x.name)+'</button>'}).join("")+'</div>';
+  h+='<div class="row"><input id="tn" placeholder="Nom de la tontine"><button data-a="addt">Créer</button></div></div>';
+  if(!t){h+='<div class="empty">Créez votre première tontine pour commencer.</div>';app.innerHTML=h;return}
+  var all=t.members.reduce(function(s,m){return s+total(m)},0),np=t.members.reduce(function(s,m){return s+m.pays.length},0);
+  h+='<div class="stats"><div class="st"><small>Total collecté</small><b>'+fmt(all)+'</b></div><div class="st"><small>Membres</small><b>'+t.members.length+'</b></div><div class="st"><small>Paiements</small><b>'+np+'</b></div></div>';
+  h+='<div class="card"><h2>Ajouter un membre à « '+esc(t.name)+' »</h2><div class="row"><input id="mn" placeholder="Nom"><input id="mpn" placeholder="Prénom"><input id="mp" placeholder="Numéro de téléphone" inputmode="tel"></div><div class="row"><button data-a="addm">Enregistrer le membre</button></div></div>';
+  if(!t.members.length)h+='<div class="empty">Aucun membre pour le moment.</div>';
+  t.members.forEach(function(m){
+    var ph=(m.phone||"").replace(/[^\d+]/g,"");
+    h+='<div class="card"><div class="mh"><div class="n"><b>'+esc(m.prenom)+' '+esc(m.nom)+'</b><small>'+(ph?'<a href="tel:'+ph+'" style="color:inherit">'+esc(m.phone)+'</a>':'Pas de numéro')+'</small></div><div class="tot"><small>Total cotisé</small><b>'+fmt(total(m))+'</b></div></div>';
+    h+='<div class="acts"><button class="sm '+(S.open===m.id?'g':'')+'" data-a="open" data-id="'+m.id+'">'+(S.open===m.id?'Fermer':'+ Enregistrer un paiement')+'</button><button class="sm d" data-a="delm" data-id="'+m.id+'">Retirer</button></div>';
+    if(S.open===m.id){var n=now();h+='<div class="form"><div class="row" style="margin-top:0"><label>Montant payé (FCFA)<input id="pa" type="number" min="1" inputmode="numeric" placeholder="ex. 5000"></label><label>Date<input id="pd" type="date" value="'+n.d+'"></label><label>Heure<input id="pt" type="time" value="'+n.t+'"></label></div><div class="row"><button data-a="pay" data-id="'+m.id+'">Valider le paiement</button></div></div>'}
+    if(m.pays.length){h+='<div class="hist">'+m.pays.slice().sort(function(a,b){return (b.d+b.t)<(a.d+a.t)?-1:1}).map(function(p){return '<div class="p"><span>'+esc(show(p))+'</span><b>+ '+fmt(p.a)+'</b><button class="g sm d" data-a="delp" data-id="'+m.id+'" data-p="'+p.id+'" title="Supprimer ce paiement">✕</button></div>'}).join("")+'</div>'}
+    h+='</div>';
+  });
+  h+='<div style="text-align:center"><button class="d sm" data-a="delt">Supprimer cette tontine</button></div>';
+  app.innerHTML=h;
+}
+var app=document.getElementById("app");
+app.addEventListener("click",function(e){
+  var b=e.target.closest("[data-a]");if(!b)return;
+  var a=b.dataset.a,t=cur(),v=function(id){return document.getElementById(id).value.trim()};
+  var mem=function(id){return t.members.find(function(m){return m.id===id})};
+  if(a==="sel"){S.cur=b.dataset.id;S.open=null}
+  else if(a==="addt"){var nm=v("tn");if(!nm){alert("Indiquez le nom de la tontine.");return}var x={id:uid(),name:nm,members:[]};S.t.push(x);S.cur=x.id;S.open=null}
+  else if(a==="addm"){var n1=v("mn"),n2=v("mpn");if(!n1||!n2){alert("Indiquez le nom et le prénom.");return}t.members.push({id:uid(),nom:n1,prenom:n2,phone:v("mp"),pays:[]})}
+  else if(a==="open"){S.open=S.open===b.dataset.id?null:b.dataset.id}
+  else if(a==="pay"){var am=+v("pa"),d=v("pd"),tm=v("pt");if(!(am>0)||!d||!tm){alert("Renseignez le montant, la date et l’heure.");return}mem(b.dataset.id).pays.push({id:uid(),a:am,d:d,t:tm});S.open=null}
+  else if(a==="delp"){if(!confirm("Supprimer ce paiement ?"))return;var m=mem(b.dataset.id);m.pays=m.pays.filter(function(p){return p.id!==b.dataset.p})}
+  else if(a==="delm"){if(!confirm("Retirer ce membre et son historique ?"))return;t.members=t.members.filter(function(m){return m.id!==b.dataset.id})}
+  else if(a==="delt"){if(!confirm("Supprimer définitivement cette tontine ?"))return;S.t=S.t.filter(function(x){return x.id!==t.id});S.cur=S.t.length?S.t[0].id:null;S.open=null}
+  save();render();
+});
+if(!cur()&&S.t.length)S.cur=S.t[0].id;
+render();
+</script></body></html>
+
